@@ -1,1 +1,2 @@
 # s0llyman.github.io
+The problem it solves: The existing spiral configurator takes abstract math parameters as input, not the real-world dimensions we actually care about. Its "base width" field isn't the edge you measure on the part, and its output comes out at a different scale than what you type. That mismatch meant a 50 mm base was coming out at ~45 mm, and getting a part to a specific base width, tip width, and arm length at the same time required a lot of manual trial-and-error.
