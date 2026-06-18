@@ -3,19 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SpiRobs Tentacle Solver</title>
+<title>Tentacle Segment Solver</title>
 <style>
-  :root{--bg:#0f1115;--panel:#181b22;--line:#262b35;--txt:#e6e9ef;--dim:#9aa3b2;--accent:#5b8cff;--good:#3ddc97}
+  :root{--bg:#0f1115;--panel:#181b22;--line:#262b35;--txt:#e6e9ef;--dim:#9aa3b2;--accent:#5b8cff;--good:#3ddc97;--warn:#ffcf6b}
   *{box-sizing:border-box}
   body{margin:0;font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
   header{padding:22px 24px;border-bottom:1px solid var(--line)}
   h1{margin:0;font-size:20px}
   header p{margin:4px 0 0;color:var(--dim);font-size:13px}
-  .wrap{display:grid;grid-template-columns:320px 1fr;gap:0;min-height:calc(100vh - 70px)}
+  .wrap{display:grid;grid-template-columns:380px 1fr;gap:0;min-height:calc(100vh - 70px)}
   .inputs{padding:22px 24px;border-right:1px solid var(--line)}
   .out{padding:22px 24px;overflow:auto}
   label{display:block;margin:14px 0 4px;font-size:13px;color:var(--dim)}
-  input{width:100%;padding:9px 11px;background:#0c0e12;border:1px solid var(--line);border-radius:8px;color:var(--txt);font-size:15px}
+  input{width:100%;padding:8px 10px;background:#0c0e12;border:1px solid var(--line);border-radius:8px;color:var(--txt);font-size:14px}
   input:focus{outline:none;border-color:var(--accent)}
   .hint{font-size:12px;color:var(--dim);margin-top:3px}
   h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin:24px 0 8px}
@@ -24,196 +24,197 @@
   td,th{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--dim);font-weight:600;font-size:12px}
   td.v{font-variant-numeric:tabular-nums;font-weight:600}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
-  .scale{font-size:22px;font-weight:700;color:var(--good)}
-  .warn{color:#ffcf6b;font-size:13px;margin-top:6px}
-  canvas{background:#0c0e12;border:1px solid var(--line);border-radius:10px;width:100%;max-width:420px;display:block}
-  code{background:#0c0e12;padding:1px 6px;border-radius:5px;font-size:13px}
+  .big{font-size:22px;font-weight:700;color:var(--good)}
+  .warn{color:var(--warn);font-size:13px;margin-top:6px}
+  canvas{background:#0c0e12;border:1px solid var(--line);border-radius:10px;width:100%;display:block}
   .ok{color:var(--good)}
+  .anchorRow{display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:6px}
+  .anchorRow input{padding:6px 8px}
+  .x{background:#2a2f3a;border:1px solid var(--line);border-radius:6px;color:var(--dim);cursor:pointer;text-align:center;padding:6px 0;font-size:14px}
+  .x:hover{color:#ff8080}
+  button.add{margin-top:8px;background:#1f2530;border:1px solid var(--line);color:var(--accent);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px;width:100%}
+  button.add:hover{border-color:var(--accent)}
+  .lbl3{display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;font-size:11px;color:var(--dim);margin:10px 0 4px}
+  code{background:#0c0e12;padding:1px 6px;border-radius:5px;font-size:13px}
   footer{padding:14px 24px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
 </style>
 </head>
 <body>
 <header>
-  <h1>SpiRobs Tentacle Solver</h1>
-  <p>Type the physical dimensions you want. Get the configurator inputs, scale factor, and Variable Studio values — all at once.</p>
+  <h1>Tentacle Segment Solver</h1>
+  <p>Give it your anchor segments (CAD #, diameter, position). It fills in every segment in between — diameters and spacing — and gives you the Variable Studio values.</p>
 </header>
 
 <div class="wrap">
   <div class="inputs">
-    <label>Base width (mm) — P3→P5 side</label>
-    <input id="base" type="number" value="50" step="1" min="1">
-    <label>Tip width (mm) — P3→P5 side</label>
-    <input id="tip" type="number" value="5" step="1" min="0.1">
-    <label>Arm length (cm)</label>
-    <input id="arm" type="number" value="26" step="1" min="1">
-    <label>Segments</label>
-    <input id="segs" type="number" value="15" step="1" min="4" max="60">
-    <div class="hint">Segment count is a free choice — more = smoother taper, fewer = chunkier. It doesn't change base/tip/arm.</div>
+    <label>Total CAD segments</label>
+    <input id="N" type="number" value="15" min="2" max="60" step="1">
+
+    <h2 style="margin-top:20px">Anchor segments</h2>
+    <div class="hint">Each anchor pins a known segment. The tip is position 0. Diameters and positions interpolate linearly between anchors.</div>
+    <div class="lbl3"><span>CAD seg</span><span>Diameter mm</span><span>Pos from tip</span><span></span></div>
+    <div id="anchors"></div>
+    <button class="add" id="addBtn">+ Add anchor</button>
   </div>
 
   <div class="out" id="out"></div>
 </div>
 
-<footer>Static page — pure HTML/JS, no server. Math mirrors the SpiRobs logarithmic-spiral configurator (ρ = a·e^(bθ)). Host free on GitHub Pages.</footer>
+<footer>Static page — pure HTML/JS, no server. Builds a custom (non-spiral) tapered tentacle from anchor points. Host free on GitHub Pages.</footer>
 
 <script>
-// ---- geometry (mirrors the configurator) -----------------------------------
-const TAU = 2*Math.PI;
-const p = (a,b,t)=>a*Math.exp(b*t);
-const sub=(P,Q)=>[P[0]-Q[0],P[1]-Q[1]];
-const add=(P,Q)=>[P[0]+Q[0],P[1]+Q[1]];
-const sm=(s,P)=>[s*P[0],s*P[1]];
-const dot=(P,Q)=>P[0]*Q[0]+P[1]*Q[1];
-const norm=P=>Math.hypot(P[0],P[1]);
-function reflect(P,A,B){let d=sub(B,A);const dn=norm(d);d=[d[0]/dn,d[1]/dn];
-  const proj=add(A,sm(dot(sub(P,A),d),d));return sub(sm(2,proj),P);}
-function seg6(a,b,dth,i){
-  const t1=dth*i,t2=dth*(i+1);
-  const r1=p(a,b,t1),r2=p(a,b,t2);
-  const r3=(p(a,b,t1+TAU)+r1)/2, r4=(p(a,b,t2+TAU)+r2)/2;
-  const P1=[r1*Math.cos(t1),r1*Math.sin(t1)], P2=[r2*Math.cos(t2),r2*Math.sin(t2)];
-  const P3=[r3*Math.cos(t1),r3*Math.sin(t1)], P4=[r4*Math.cos(t2),r4*Math.sin(t2)];
-  return [P1,P2,P3,P4,reflect(P1,P3,P4),reflect(P2,P3,P4)];
-}
-const Kf=b=>{const g=Math.exp(TAU*b);return (g+1)*Math.sqrt(b*b+1)/(2*b*(g-1));};
-function solveGeom(b,W,L){const K=Kf(b);let Lmax=W*K;if(L>=Lmax)L=0.99*Lmax;
-  const th=-Math.log(1-L/Lmax)/b; const a=W/((Math.exp(TAU*b)-1)*Math.exp(b*th));return [a,th];}
-function tipForB(b,Wb,L){const g=Math.exp(TAU*b),K=Kf(b),Lmax=Wb*K,Lu=Math.min(L,0.99*Lmax);
-  const th=-Math.log(1-Lu/Lmax)/b; const a=Wb/((g-1)*Math.exp(b*th));return a*(g-1);}
-function bFromTip(Wt,Wb,L){if(Wt>=Wb)return 0.02;let lo=0.02,hi=2.0;
-  for(let k=0;k<90;k++){const m=(lo+hi)/2; if(tipForB(m,Wb,L)>Wt)lo=m;else hi=m;}return (lo+hi)/2;}
-function ang(A,V,C){return Math.acos(Math.max(-1,Math.min(1,
-  dot(sub(A,V),sub(C,V))/(norm(sub(A,V))*norm(sub(C,V))))))*180/Math.PI;}
-function profile(a,b,th,n,i){const P=seg6(a,b,th/n,i);
-  return {P3P4:norm(sub(P[2],P[3])),P3P5:norm(sub(P[2],P[4])),
-          P5P6:norm(sub(P[4],P[5])),P6P4:norm(sub(P[5],P[3])),
-          aP3:ang(P[0],P[2],P[3]),aP4:ang(P[1],P[3],P[2]),
-          aP5:ang(P[5],P[4],P[2]),aP6:ang(P[4],P[5],P[3])};}
+// ---- state -----------------------------------------------------------------
+let anchors = [
+  {seg:1,  dia:10, pos:0},
+  {seg:5,  dia:27, pos:50},
+  {seg:10, dia:35, pos:120},
+  {seg:13, dia:45, pos:190},
+  {seg:15, dia:50, pos:260},
+];
 
-// ---- solver: find configurator inputs for the targets ----------------------
-function solve(baseMM,tipMM,armCM,n){
-  const Wb=0.059;                       // anchor; absolute size recovered by rescale
-  const tgtR=baseMM/tipMM;              // base/tip side ratio
-  const tgtL=(armCM*10)/baseMM;         // arm/base (scale free)
-  function score(Wt,L){const b=bFromTip(Wt,Wb,L);const [a,th]=solveGeom(b,Wb,L);
-    const sb=profile(a,b,th,n,n-1).P3P5, st=profile(a,b,th,n,0).P3P5;
-    if(sb<=0||st<=0)return null;
-    const r=sb/st, lr=L/sb;
-    const err=((r-tgtR)/tgtR)**2+((lr-tgtL)/tgtL)**2;
-    return {err,b,a,th,sb,st};}
-  let WtLo=0.0003,WtHi=Wb*0.92,LLo=0.008,LHi=0.30,best=null;
-  for(let stage=0;stage<6;stage++){
-    for(let i=0;i<55;i++)for(let j=0;j<55;j++){
-      const Wt=WtLo+(WtHi-WtLo)*i/54, L=LLo+(LHi-LLo)*j/54;
-      const s=score(Wt,L); if(s&&(!best||s.err<best.err))best={...s,Wt,L};}
-    const dWt=(WtHi-WtLo)/11, dL=(LHi-LLo)/11;
-    WtLo=Math.max(0.0003,best.Wt-dWt);WtHi=best.Wt+dWt;
-    LLo=Math.max(0.004,best.L-dL);LHi=best.L+dL;
+// profile side ratios relative to base_p35 (from your halved profile)
+const RAT = {p34:17.04/25, p56:5.35/25, p64:29.05/25, holeR:16.667/25};
+
+// ---- helpers ---------------------------------------------------------------
+function interp(sorted,key,k){
+  if(k<=sorted[0].seg){
+    const a=sorted[0],b=sorted[1]||sorted[0];
+    if(b.seg===a.seg)return a[key];
+    return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
   }
-  best.scale=(baseMM/1000)/best.sb; best.n=n; best.Wb=Wb;
-  return best;
+  for(let i=0;i<sorted.length-1;i++){
+    if(k>=sorted[i].seg&&k<=sorted[i+1].seg){
+      const a=sorted[i],b=sorted[i+1];
+      return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
+    }
+  }
+  const a=sorted[sorted.length-2]||sorted[sorted.length-1],b=sorted[sorted.length-1];
+  if(b.seg===a.seg)return b[key];
+  return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
+}
+const f=(x,d=2)=>x.toFixed(d);
+
+// ---- inputs UI -------------------------------------------------------------
+function renderInputs(){
+  const box=document.getElementById('anchors');
+  box.innerHTML='';
+  anchors.forEach((an,i)=>{
+    const row=document.createElement('div');row.className='anchorRow';
+    row.innerHTML=
+      `<input type="number" data-i="${i}" data-k="seg" value="${an.seg}" step="1" min="1">`+
+      `<input type="number" data-i="${i}" data-k="dia" value="${an.dia}" step="0.5" min="0.1">`+
+      `<input type="number" data-i="${i}" data-k="pos" value="${an.pos}" step="1" min="0">`+
+      `<div class="x" data-del="${i}">&times;</div>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
+    const i=+e.target.dataset.i,k=e.target.dataset.k;
+    anchors[i][k]=+e.target.value; compute();
+  }));
+  box.querySelectorAll('.x').forEach(b=>b.addEventListener('click',e=>{
+    if(anchors.length<=2)return;
+    anchors.splice(+e.target.dataset.del,1); renderInputs(); compute();
+  }));
 }
 
-// ---- render ----------------------------------------------------------------
-function fmt(x,d=2){return x.toFixed(d);}
-function render(){
-  const base=+document.getElementById('base').value;
-  const tip=+document.getElementById('tip').value;
-  const arm=+document.getElementById('arm').value;
-  const n=Math.max(4,Math.min(60,Math.round(+document.getElementById('segs').value)));
-  if(!(base>0&&tip>0&&arm>0)||tip>=base){document.getElementById('out').innerHTML=
-    '<div class="card warn">Enter positive numbers with tip &lt; base.</div>';return;}
+// ---- compute + render ------------------------------------------------------
+function compute(){
+  const N=Math.max(2,Math.min(60,Math.round(+document.getElementById('N').value)));
+  const sorted=[...anchors].filter(a=>a.seg>0).sort((a,b)=>a.seg-b.seg);
+  if(sorted.length<2){document.getElementById('out').innerHTML=
+    '<div class="card warn">Need at least 2 anchors.</div>';return;}
 
-  const r=solve(base,tip,arm,n);
-  const {a,b,th,scale}=r;
-  const bp=profile(a,b,th,n,n-1);
-  const segs=[];for(let k=1;k<=n;k++)segs.push(profile(a,b,th,n,k-1).P3P5/r.sb);
-
-  let segRows='';for(let k=0;k<n;k++){
-    if(k%2===0)segRows+='<tr>';
-    segRows+=`<td>seg_${k+1}</td><td class="v">${segs[k].toFixed(4)}</td>`;
-    if(k%2===1||k===n-1)segRows+='</tr>';
+  const rows=[];
+  for(let k=1;k<=N;k++){
+    rows.push({k, dia:interp(sorted,'dia',k), pos:interp(sorted,'pos',k)});
   }
+  const topDia=rows[N-1].dia;                 // diameter at the largest segment
+  const base_p35=topDia/2;                    // diameter = 2 × base_p35
+  const total=rows[N-1].pos-rows[0].pos;
 
-  const sideErr=Math.abs(r.sb/r.st-base/tip)/(base/tip)*100;
-  const lenErr=Math.abs(r.L/r.sb-(arm*10)/base)/((arm*10)/base)*100;
+  // warnings
+  let warns=[];
+  if(sorted[0].seg!==1) warns.push('No anchor at CAD seg 1 (tip) — segment 1 is extrapolated.');
+  if(sorted[sorted.length-1].seg!==N) warns.push(`No anchor at CAD seg ${N} (base) — top segment is extrapolated.`);
+  for(let i=1;i<sorted.length;i++) if(sorted[i].pos<=sorted[i-1].pos)
+    warns.push(`Anchor positions must increase: seg ${sorted[i-1].seg}→${sorted[i].seg}.`);
+
+  // seg_ table rows
+  let segRows='';
+  for(let k=0;k<N;k++){
+    const r=rows[k], gap=k===0?0:rows[k].pos-rows[k-1].pos;
+    const isA=sorted.some(a=>a.seg===k+1);
+    segRows+=`<tr${isA?' style="color:var(--good)"':''}>`+
+      `<td>seg_${k+1}${isA?' ★':''}</td>`+
+      `<td class="v">${f(r.dia,1)}</td>`+
+      `<td class="v">${f(r.dia/topDia,3)}</td>`+
+      `<td class="v">${k===0?'—':f(gap,1)}</td>`+
+      `<td class="v">${f(r.pos,1)}</td></tr>`;
+  }
 
   document.getElementById('out').innerHTML=`
-  <h2>1 · Configurator inputs (Streamlit, Simple mode)</h2>
+  ${warns.length?`<div class="card warn">${warns.join('<br>')}</div>`:''}
+
+  <h2>1 · Base profile · Variable Studio</h2>
   <div class="card"><table>
-    <tr><td>Base width</td><td class="v">${fmt(r.Wb*1000,1)} mm</td></tr>
-    <tr><td>Tip width</td><td class="v">${fmt(r.Wt*1000,2)} mm</td></tr>
-    <tr><td>Arm length</td><td class="v">${fmt(r.L*100,2)} cm</td></tr>
-    <tr><td>Segments</td><td class="v">${n}</td></tr>
+    <tr><td>base_p35</td><td class="v">${f(base_p35)} mm</td><td class="hint">= largest diameter ÷ 2</td></tr>
+    <tr><td>base_p34</td><td class="v">${f(base_p35*RAT.p34)} mm</td><td></td></tr>
+    <tr><td>base_p56</td><td class="v">${f(base_p35*RAT.p56)} mm</td><td></td></tr>
+    <tr><td>base_64</td><td class="v">${f(base_p35*RAT.p64)} mm</td><td></td></tr>
+    <tr><td>cutout_diameter</td><td class="v">${f(base_p35*RAT.p64)} mm</td><td></td></tr>
+    <tr><td>hole_pos_radius</td><td class="v">${f(base_p35*RAT.holeR)} mm</td><td></td></tr>
   </table>
-  <div class="hint">After typing these, the app should show Seg 1 ≈ <b>${fmt(r.st/r.sb*100,1)}%</b> and P3→P5 ≈ <b>${fmt(r.sb*1000,2)} mm</b>.</div>
+  <div class="hint">Angles (ang_*) stay as they are. With base_p35 = ${f(base_p35)}, seg_${N} (=1.0) gives a ${f(topDia)} mm diameter.</div></div>
+
+  <h2>2 · Segments — diameters &amp; spacing</h2>
+  <div class="card"><table>
+    <thead><tr><th>var</th><th>Ø mm</th><th>seg_ value</th><th>gap mm</th><th>pos from tip</th></tr></thead>
+    <tbody>${segRows}</tbody></table>
+    <div class="hint" style="margin-top:8px">★ = your anchors. <b>seg_ value</b> → Variable Studio. <b>pos from tip</b> → each segment's placement (if segments are individually positioned).</div>
   </div>
 
-  <h2>2 · Scale factor</h2>
-  <div class="card"><span class="scale">${fmt(scale,4)}×</span>
-  <div class="hint">Already baked into the Variable Studio values below — no separate CAD scale needed.</div></div>
+  <h2>3 · Total length</h2>
+  <div class="card"><span class="big">${f(total)} mm</span>
+  <div class="hint">Sum of all gaps, tip to base. This is the real built length — no spiral truncation, so no over-ask needed.</div></div>
 
-  <h2>3 · Base profile · Variable Studio (final size)</h2>
-  <div class="card"><div class="grid2"><table>
-    <tr><td>base_p34</td><td class="v">${fmt(bp.P3P4*1000*scale)} mm</td></tr>
-    <tr><td>base_p35</td><td class="v">${fmt(bp.P3P5*1000*scale)} mm</td></tr>
-    <tr><td>base_p56</td><td class="v">${fmt(bp.P5P6*1000*scale)} mm</td></tr>
-    <tr><td>base_64</td><td class="v">${fmt(bp.P6P4*1000*scale)} mm</td></tr>
-  </table><table>
-    <tr><td>ang_p3</td><td class="v">${fmt(bp.aP3)}°</td></tr>
-    <tr><td>ang_p4</td><td class="v">${fmt(bp.aP4)}°</td></tr>
-    <tr><td>ang_p5</td><td class="v">${fmt(bp.aP5)}°</td></tr>
-    <tr><td>ang_p6</td><td class="v">${fmt(bp.aP6)}°</td></tr>
-  </table></div></div>
+  <h2>4 · Preview (side profile)</h2>
+  <div class="card"><canvas id="cv" width="760" height="280"></canvas></div>`;
 
-  <h2>4 · Segment scale variables</h2>
-  <div class="card"><table><thead><tr><th>var</th><th>value</th><th>var</th><th>value</th></tr></thead>
-    <tbody>${segRows}</tbody></table></div>
-
-  <h2>5 · Preview &amp; check</h2>
-  <div class="card">
-    <canvas id="cv" width="420" height="420"></canvas>
-    <table style="margin-top:10px">
-      <tr><td>base side</td><td class="v ${Math.abs(r.sb*1000*scale-base)<0.5?'ok':'warn'}">${fmt(r.sb*1000*scale)} mm</td></tr>
-      <tr><td>tip side</td><td class="v ${Math.abs(r.st*1000*scale-tip)<0.5?'ok':'warn'}">${fmt(r.st*1000*scale)} mm</td></tr>
-      <tr><td>arm length</td><td class="v ${Math.abs(r.L*1000*scale/10-arm)<0.5?'ok':'warn'}">${fmt(r.L*1000*scale/10)} cm</td></tr>
-      <tr><td>taper b · turns</td><td class="v">${fmt(b,3)} · ${fmt(th/TAU,2)} rev</td></tr>
-    </table>
-    ${(sideErr>1||lenErr>1)?'<div class="warn">Solver could not hit targets exactly for this segment count — try a different count or relax a constraint.</div>':''}
-  </div>`;
-
-  drawSpiral(r,scale);
+  draw(rows,topDia,total);
 }
 
-function drawSpiral(r,scale){
+function draw(rows,topDia,total){
   const cv=document.getElementById('cv'); if(!cv)return;
-  const ctx=cv.getContext('2d'); const W=cv.width,H=cv.height;
-  ctx.clearRect(0,0,W,H);
-  const {a,b,th,n}=r; const dth=th/n; const polys=[];
-  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
-  for(let i=0;i<n;i++){const P=seg6(a,b,dth,i);
-    const half1=[P[0],P[1],P[3],P[2]];   // outer + central
-    const half2=[P[4],P[5],P[3],P[2]];   // mirror
-    [half1,half2].forEach(q=>{polys.push(q);q.forEach(pt=>{
-      minx=Math.min(minx,pt[0]);miny=Math.min(miny,pt[1]);
-      maxx=Math.max(maxx,pt[0]);maxy=Math.max(maxy,pt[1]);});});}
-  const pad=20, sx=(W-2*pad)/(maxx-minx||1), sy=(H-2*pad)/(maxy-miny||1);
-  const sc=Math.min(sx,sy);
-  const tx=x=>pad+(x-minx)*sc, ty=y=>H-(pad+(y-miny)*sc);
-  polys.forEach((q,idx)=>{
-    ctx.beginPath();ctx.moveTo(tx(q[0][0]),ty(q[0][1]));
-    for(let k=1;k<q.length;k++)ctx.lineTo(tx(q[k][0]),ty(q[k][1]));
-    ctx.closePath();
-    const t=idx/(polys.length-1||1);
-    ctx.fillStyle=`hsl(${210+t*60},70%,${30+t*25}%)`;
-    ctx.fill();ctx.strokeStyle='#ffffff22';ctx.stroke();});
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+  const pad=24, x0=rows[0].pos, span=total||1;
+  const sx=(W-2*pad)/span, sy=(H-2*pad)/topDia, mid=H/2;
+  const TX=p=>pad+(p-x0)*sx, TY=d=>mid-d*sy/2, BY=d=>mid+d*sy/2;
+  // centerline
+  ctx.strokeStyle='#ffffff18';ctx.beginPath();ctx.moveTo(pad,mid);ctx.lineTo(W-pad,mid);ctx.stroke();
+  // taper outline
+  ctx.beginPath();
+  rows.forEach((r,i)=>{const x=TX(r.pos);i?ctx.lineTo(x,TY(r.dia)):ctx.moveTo(x,TY(r.dia));});
+  for(let i=rows.length-1;i>=0;i--){const r=rows[i];ctx.lineTo(TX(r.pos),BY(r.dia));}
+  ctx.closePath();ctx.fillStyle='#5b8cff22';ctx.strokeStyle='#5b8cff';ctx.stroke();ctx.fill();
+  // each segment as a bar
+  rows.forEach(r=>{const x=TX(r.pos);
+    ctx.strokeStyle='#9aa3b288';ctx.beginPath();ctx.moveTo(x,TY(r.dia));ctx.lineTo(x,BY(r.dia));ctx.stroke();});
+  // anchor markers
+  ctx.fillStyle='#3ddc97';
+  rows.forEach(r=>{if(anchors.some(a=>a.seg===r.k)){const x=TX(r.pos);
+    ctx.beginPath();ctx.arc(x,TY(r.dia),4,0,7);ctx.fill();
+    ctx.fillStyle='#3ddc97';ctx.font='11px system-ui';
+    ctx.fillText(f(r.dia,0),x-7,TY(r.dia)-8);ctx.fillStyle='#3ddc97';}});
 }
 
-['base','tip','arm','segs'].forEach(id=>
-  document.getElementById(id).addEventListener('input',render));
-render();
+document.getElementById('N').addEventListener('input',compute);
+document.getElementById('addBtn').addEventListener('click',()=>{
+  const last=anchors[anchors.length-1];
+  anchors.push({seg:last.seg+1,dia:last.dia,pos:last.pos+50});
+  renderInputs(); compute();
+});
+renderInputs(); compute();
 </script>
 </body>
 </html>
