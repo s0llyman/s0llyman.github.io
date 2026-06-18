@@ -11,7 +11,7 @@
   header{padding:22px 24px;border-bottom:1px solid var(--line)}
   h1{margin:0;font-size:20px}
   header p{margin:4px 0 0;color:var(--dim);font-size:13px}
-  .wrap{display:grid;grid-template-columns:380px 1fr;gap:0;min-height:calc(100vh - 70px)}
+  .wrap{display:grid;grid-template-columns:360px 1fr;gap:0;min-height:calc(100vh - 70px)}
   .inputs{padding:22px 24px;border-right:1px solid var(--line)}
   .out{padding:22px 24px;overflow:auto}
   label{display:block;margin:14px 0 4px;font-size:13px;color:var(--dim)}
@@ -29,21 +29,21 @@
   .warn{color:var(--warn);font-size:13px;margin-top:6px}
   canvas{background:#0c0e12;border:1px solid var(--line);border-radius:10px;width:100%;display:block}
   .ok{color:var(--good)}
-  .anchorRow{display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:6px}
-  .anchorRow input{padding:6px 8px}
+  .row2{display:grid;grid-template-columns:1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:6px}
+  .row2 input{padding:6px 8px}
   .x{background:#2a2f3a;border:1px solid var(--line);border-radius:6px;color:var(--dim);cursor:pointer;text-align:center;padding:6px 0;font-size:14px}
   .x:hover{color:#ff8080}
   button.add{margin-top:8px;background:#1f2530;border:1px solid var(--line);color:var(--accent);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px;width:100%}
   button.add:hover{border-color:var(--accent)}
-  .lbl3{display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;font-size:11px;color:var(--dim);margin:10px 0 4px}
-  code{background:#0c0e12;padding:1px 6px;border-radius:5px;font-size:13px}
+  .lbl2{display:grid;grid-template-columns:1fr 1fr 28px;gap:6px;font-size:11px;color:var(--dim);margin:10px 0 4px}
+  .hl{color:var(--good)}
   footer{padding:14px 24px;border-top:1px solid var(--line);color:var(--dim);font-size:12px}
 </style>
 </head>
 <body>
 <header>
   <h1>Tentacle Segment Solver</h1>
-  <p>Give it your anchor segments (CAD #, diameter, position). It fills in every segment in between — diameters and spacing — and gives you the Variable Studio values.</p>
+  <p>Segments stacked flush (no gaps). Give anchor diameters + total length — it returns base_p35 (width), base_p34 (length), and every seg_ value.</p>
 </header>
 
 <div class="wrap">
@@ -51,9 +51,13 @@
     <label>Total CAD segments</label>
     <input id="N" type="number" value="15" min="2" max="60" step="1">
 
-    <h2 style="margin-top:20px">Anchor segments</h2>
-    <div class="hint">Each anchor pins a known segment. The tip is position 0. Diameters and positions interpolate linearly between anchors.</div>
-    <div class="lbl3"><span>CAD seg</span><span>Diameter mm</span><span>Pos from tip</span><span></span></div>
+    <label>Target total length (mm)</label>
+    <input id="L" type="number" value="260" min="1" step="1">
+    <div class="hint">Segments touch, so length = base_p34 × (sum of seg_ values).</div>
+
+    <h2 style="margin-top:20px">Anchor diameters</h2>
+    <div class="hint">Pin known segments (CAD # → diameter). Diameters interpolate linearly between them.</div>
+    <div class="lbl2"><span>CAD seg</span><span>Diameter mm</span><span></span></div>
     <div id="anchors"></div>
     <button class="add" id="addBtn">+ Add anchor</button>
   </div>
@@ -61,160 +65,139 @@
   <div class="out" id="out"></div>
 </div>
 
-<footer>Static page — pure HTML/JS, no server. Builds a custom (non-spiral) tapered tentacle from anchor points. Host free on GitHub Pages.</footer>
+<footer>Static page — pure HTML/JS, no server. Flush-stacked tapered tentacle: width (base_p35) and length (base_p34) are independent. Host free on GitHub Pages.</footer>
 
 <script>
 // ---- state -----------------------------------------------------------------
 let anchors = [
-  {seg:1,  dia:10, pos:0},
-  {seg:5,  dia:27, pos:50},
-  {seg:10, dia:35, pos:120},
-  {seg:13, dia:45, pos:190},
-  {seg:15, dia:50, pos:260},
+  {seg:1,  dia:10},
+  {seg:5,  dia:27},
+  {seg:10, dia:35},
+  {seg:13, dia:45},
+  {seg:15, dia:50},
 ];
+// cross-section side ratios relative to base_p35 (from your halved profile)
+const RAT = {p56:5.35/25, p64:29.05/25, holeR:16.667/25};
 
-// profile side ratios relative to base_p35 (from your halved profile)
-const RAT = {p34:17.04/25, p56:5.35/25, p64:29.05/25, holeR:16.667/25};
-
-// ---- helpers ---------------------------------------------------------------
-function interp(sorted,key,k){
-  if(k<=sorted[0].seg){
-    const a=sorted[0],b=sorted[1]||sorted[0];
-    if(b.seg===a.seg)return a[key];
-    return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
-  }
-  for(let i=0;i<sorted.length-1;i++){
-    if(k>=sorted[i].seg&&k<=sorted[i+1].seg){
-      const a=sorted[i],b=sorted[i+1];
-      return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
-    }
-  }
-  const a=sorted[sorted.length-2]||sorted[sorted.length-1],b=sorted[sorted.length-1];
+function interp(s,key,k){
+  if(k<=s[0].seg){const a=s[0],b=s[1]||s[0];if(b.seg===a.seg)return a[key];
+    return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);}
+  for(let i=0;i<s.length-1;i++){if(k>=s[i].seg&&k<=s[i+1].seg){const a=s[i],b=s[i+1];
+    return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);}}
+  const a=s[s.length-2]||s[s.length-1],b=s[s.length-1];
   if(b.seg===a.seg)return b[key];
   return a[key]+(b[key]-a[key])*(k-a.seg)/(b.seg-a.seg);
 }
 const f=(x,d=2)=>x.toFixed(d);
 
-// ---- inputs UI -------------------------------------------------------------
 function renderInputs(){
-  const box=document.getElementById('anchors');
-  box.innerHTML='';
+  const box=document.getElementById('anchors');box.innerHTML='';
   anchors.forEach((an,i)=>{
-    const row=document.createElement('div');row.className='anchorRow';
+    const row=document.createElement('div');row.className='row2';
     row.innerHTML=
       `<input type="number" data-i="${i}" data-k="seg" value="${an.seg}" step="1" min="1">`+
       `<input type="number" data-i="${i}" data-k="dia" value="${an.dia}" step="0.5" min="0.1">`+
-      `<input type="number" data-i="${i}" data-k="pos" value="${an.pos}" step="1" min="0">`+
       `<div class="x" data-del="${i}">&times;</div>`;
     box.appendChild(row);
   });
   box.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',e=>{
-    const i=+e.target.dataset.i,k=e.target.dataset.k;
-    anchors[i][k]=+e.target.value; compute();
-  }));
+    anchors[+e.target.dataset.i][e.target.dataset.k]=+e.target.value;compute();}));
   box.querySelectorAll('.x').forEach(b=>b.addEventListener('click',e=>{
-    if(anchors.length<=2)return;
-    anchors.splice(+e.target.dataset.del,1); renderInputs(); compute();
-  }));
+    if(anchors.length<=2)return;anchors.splice(+e.target.dataset.del,1);renderInputs();compute();}));
 }
 
-// ---- compute + render ------------------------------------------------------
 function compute(){
   const N=Math.max(2,Math.min(60,Math.round(+document.getElementById('N').value)));
+  const L=+document.getElementById('L').value;
   const sorted=[...anchors].filter(a=>a.seg>0).sort((a,b)=>a.seg-b.seg);
-  if(sorted.length<2){document.getElementById('out').innerHTML=
-    '<div class="card warn">Need at least 2 anchors.</div>';return;}
+  if(sorted.length<2||!(L>0)){document.getElementById('out').innerHTML=
+    '<div class="card warn">Need ≥2 anchors and a positive length.</div>';return;}
 
-  const rows=[];
-  for(let k=1;k<=N;k++){
-    rows.push({k, dia:interp(sorted,'dia',k), pos:interp(sorted,'pos',k)});
-  }
-  const topDia=rows[N-1].dia;                 // diameter at the largest segment
-  const base_p35=topDia/2;                    // diameter = 2 × base_p35
-  const total=rows[N-1].pos-rows[0].pos;
+  const dia=[],val=[];let sumSeg=0;
+  for(let k=1;k<=N;k++)dia.push(interp(sorted,'dia',k));
+  const topDia=dia[N-1];
+  for(let k=0;k<N;k++){val.push(dia[k]/topDia);sumSeg+=val[k];}
 
-  // warnings
+  const base_p35=topDia/2;
+  const base_p34=L/sumSeg;                 // length lever (segments touch)
+
+  // per-segment thickness + cumulative position from tip
+  const thick=val.map(v=>v*base_p34);
+  const pos=[];let run=0;for(let k=0;k<N;k++){run+=thick[k];pos.push(run);}
+  const total=run;
+
   let warns=[];
-  if(sorted[0].seg!==1) warns.push('No anchor at CAD seg 1 (tip) — segment 1 is extrapolated.');
-  if(sorted[sorted.length-1].seg!==N) warns.push(`No anchor at CAD seg ${N} (base) — top segment is extrapolated.`);
-  for(let i=1;i<sorted.length;i++) if(sorted[i].pos<=sorted[i-1].pos)
-    warns.push(`Anchor positions must increase: seg ${sorted[i-1].seg}→${sorted[i].seg}.`);
+  if(sorted[0].seg!==1)warns.push('No anchor at seg 1 (tip) — extrapolated.');
+  if(sorted[sorted.length-1].seg!==N)warns.push(`No anchor at seg ${N} (base) — extrapolated.`);
 
-  // seg_ table rows
   let segRows='';
-  for(let k=0;k<N;k++){
-    const r=rows[k], gap=k===0?0:rows[k].pos-rows[k-1].pos;
-    const isA=sorted.some(a=>a.seg===k+1);
-    segRows+=`<tr${isA?' style="color:var(--good)"':''}>`+
-      `<td>seg_${k+1}${isA?' ★':''}</td>`+
-      `<td class="v">${f(r.dia,1)}</td>`+
-      `<td class="v">${f(r.dia/topDia,3)}</td>`+
-      `<td class="v">${k===0?'—':f(gap,1)}</td>`+
-      `<td class="v">${f(r.pos,1)}</td></tr>`;
-  }
+  for(let k=0;k<N;k++){const isA=sorted.some(a=>a.seg===k+1);
+    segRows+=`<tr${isA?' class="hl"':''}><td>seg_${k+1}${isA?' ★':''}</td>`+
+      `<td class="v">${f(dia[k],1)}</td><td class="v">${f(val[k],3)}</td>`+
+      `<td class="v">${f(thick[k],1)}</td><td class="v">${f(pos[k],1)}</td></tr>`;}
 
   document.getElementById('out').innerHTML=`
   ${warns.length?`<div class="card warn">${warns.join('<br>')}</div>`:''}
 
-  <h2>1 · Base profile · Variable Studio</h2>
+  <h2>1 · The two key dimensions</h2>
   <div class="card"><table>
-    <tr><td>base_p35</td><td class="v">${f(base_p35)} mm</td><td class="hint">= largest diameter ÷ 2</td></tr>
-    <tr><td>base_p34</td><td class="v">${f(base_p35*RAT.p34)} mm</td><td></td></tr>
-    <tr><td>base_p56</td><td class="v">${f(base_p35*RAT.p56)} mm</td><td></td></tr>
-    <tr><td>base_64</td><td class="v">${f(base_p35*RAT.p64)} mm</td><td></td></tr>
-    <tr><td>cutout_diameter</td><td class="v">${f(base_p35*RAT.p64)} mm</td><td></td></tr>
-    <tr><td>hole_pos_radius</td><td class="v">${f(base_p35*RAT.holeR)} mm</td><td></td></tr>
+    <tr><td><b>base_p34</b> (length)</td><td class="v hl">${f(base_p34)} mm</td><td class="hint">= ${f(L)} ÷ ${f(sumSeg,3)} (Σ seg_)</td></tr>
+    <tr><td><b>base_p35</b> (width)</td><td class="v hl">${f(base_p35)} mm</td><td class="hint">= largest Ø ${f(topDia)} ÷ 2</td></tr>
   </table>
-  <div class="hint">Angles (ang_*) stay as they are. With base_p35 = ${f(base_p35)}, seg_${N} (=1.0) gives a ${f(topDia)} mm diameter.</div></div>
+  <div class="hint">These are independent: base_p34 sets total length, base_p35 sets diameter.</div></div>
 
-  <h2>2 · Segments — diameters &amp; spacing</h2>
+  <h2>2 · Rest of base profile (cross-section)</h2>
   <div class="card"><table>
-    <thead><tr><th>var</th><th>Ø mm</th><th>seg_ value</th><th>gap mm</th><th>pos from tip</th></tr></thead>
+    <tr><td>base_p56</td><td class="v">${f(base_p35*RAT.p56)} mm</td></tr>
+    <tr><td>base_64</td><td class="v">${f(base_p35*RAT.p64)} mm</td></tr>
+    <tr><td>cutout_diameter</td><td class="v">${f(base_p35*RAT.p64)} mm</td></tr>
+    <tr><td>hole_pos_radius</td><td class="v">${f(base_p35*RAT.holeR)} mm</td></tr>
+  </table><div class="hint">Angles (ang_*) unchanged — scaling never changes them.</div></div>
+
+  <h2>3 · Segment values</h2>
+  <div class="card"><table>
+    <thead><tr><th>var</th><th>Ø mm</th><th>seg_ value</th><th>thick mm</th><th>pos from tip</th></tr></thead>
     <tbody>${segRows}</tbody></table>
-    <div class="hint" style="margin-top:8px">★ = your anchors. <b>seg_ value</b> → Variable Studio. <b>pos from tip</b> → each segment's placement (if segments are individually positioned).</div>
+    <div class="hint" style="margin-top:8px">★ = anchors. <b>seg_ value</b> → Variable Studio. Thickness = seg_ × base_p34; positions are where each segment lands when stacked flush.</div>
   </div>
 
-  <h2>3 · Total length</h2>
+  <h2>4 · Total length</h2>
   <div class="card"><span class="big">${f(total)} mm</span>
-  <div class="hint">Sum of all gaps, tip to base. This is the real built length — no spiral truncation, so no over-ask needed.</div></div>
+  <span class="${Math.abs(total-L)<0.5?'ok':'warn'}"> (target ${f(L)})</span>
+  <div class="hint">Σ seg_ = ${f(sumSeg,3)}. Real built length of the flush stack — no spiral, no truncation.</div></div>
 
-  <h2>4 · Preview (side profile)</h2>
-  <div class="card"><canvas id="cv" width="760" height="280"></canvas></div>`;
+  <h2>5 · Preview (side profile, stacked flush)</h2>
+  <div class="card"><canvas id="cv" width="760" height="260"></canvas></div>`;
 
-  draw(rows,topDia,total);
+  draw(N,dia,thick,pos,topDia,total);
 }
 
-function draw(rows,topDia,total){
-  const cv=document.getElementById('cv'); if(!cv)return;
-  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
-  const pad=24, x0=rows[0].pos, span=total||1;
-  const sx=(W-2*pad)/span, sy=(H-2*pad)/topDia, mid=H/2;
-  const TX=p=>pad+(p-x0)*sx, TY=d=>mid-d*sy/2, BY=d=>mid+d*sy/2;
-  // centerline
+function draw(N,dia,thick,pos,topDia,total){
+  const cv=document.getElementById('cv');if(!cv)return;
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
+  const pad=24,sx=(W-2*pad)/(total||1),sy=(H-2*pad)/topDia,mid=H/2;
+  const TX=p=>pad+p*sx;
   ctx.strokeStyle='#ffffff18';ctx.beginPath();ctx.moveTo(pad,mid);ctx.lineTo(W-pad,mid);ctx.stroke();
-  // taper outline
-  ctx.beginPath();
-  rows.forEach((r,i)=>{const x=TX(r.pos);i?ctx.lineTo(x,TY(r.dia)):ctx.moveTo(x,TY(r.dia));});
-  for(let i=rows.length-1;i>=0;i--){const r=rows[i];ctx.lineTo(TX(r.pos),BY(r.dia));}
-  ctx.closePath();ctx.fillStyle='#5b8cff22';ctx.strokeStyle='#5b8cff';ctx.stroke();ctx.fill();
-  // each segment as a bar
-  rows.forEach(r=>{const x=TX(r.pos);
-    ctx.strokeStyle='#9aa3b288';ctx.beginPath();ctx.moveTo(x,TY(r.dia));ctx.lineTo(x,BY(r.dia));ctx.stroke();});
-  // anchor markers
-  ctx.fillStyle='#3ddc97';
-  rows.forEach(r=>{if(anchors.some(a=>a.seg===r.k)){const x=TX(r.pos);
-    ctx.beginPath();ctx.arc(x,TY(r.dia),4,0,7);ctx.fill();
-    ctx.fillStyle='#3ddc97';ctx.font='11px system-ui';
-    ctx.fillText(f(r.dia,0),x-7,TY(r.dia)-8);ctx.fillStyle='#3ddc97';}});
+  // each segment as a flush rectangle
+  let x=0;
+  for(let k=0;k<N;k++){const x0=TX(x),x1=TX(x+thick[k]),h=dia[k]*sy/2;
+    ctx.fillStyle=`hsl(${210+ (k/(N-1))*60},70%,${30+(k/(N-1))*22}%)`;
+    ctx.strokeStyle='#ffffff33';
+    ctx.beginPath();ctx.rect(x0,mid-h,x1-x0,2*h);ctx.fill();ctx.stroke();
+    x+=thick[k];}
+  // anchor diameter labels
+  ctx.fillStyle='#3ddc97';ctx.font='11px system-ui';let xx=0;
+  for(let k=0;k<N;k++){if(anchors.some(a=>a.seg===k+1)){
+    const cx=TX(xx+thick[k]/2),h=dia[k]*sy/2;
+    ctx.fillText(f(dia[k],0),cx-7,mid-h-5);}xx+=thick[k];}
 }
 
 document.getElementById('N').addEventListener('input',compute);
+document.getElementById('L').addEventListener('input',compute);
 document.getElementById('addBtn').addEventListener('click',()=>{
   const last=anchors[anchors.length-1];
-  anchors.push({seg:last.seg+1,dia:last.dia,pos:last.pos+50});
-  renderInputs(); compute();
-});
-renderInputs(); compute();
+  anchors.push({seg:last.seg+1,dia:last.dia});renderInputs();compute();});
+renderInputs();compute();
 </script>
 </body>
 </html>
